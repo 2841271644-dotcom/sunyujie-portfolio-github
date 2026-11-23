@@ -16,21 +16,21 @@ const projectNameText = {
 }
 const projectContents = {
   operations: {
-    5: ['第一个文件/内容一/5.png', '第一个文件/内容一/7.mp4'],
-    8: ['第一个文件/内容二/8.png', '第一个文件/内容二/9.png', '第一个文件/内容二/10.png', '第一个文件/内容二/11.png'],
-    12: ['第一个文件/内容三/12.png'],
+    5: ['第一个文件/内容一/5.webp', '第一个文件/内容一/7.mp4'],
+    8: ['第一个文件/内容二/8.webp', '第一个文件/内容二/9.webp', '第一个文件/内容二/10.webp', '第一个文件/内容二/11.webp'],
+    12: ['第一个文件/内容三/12.webp'],
   },
   ui: {
-    14: ['第二个文件/14.png', '第二个文件/15.png', '第二个文件/16.png', '第二个文件/17.png', '第二个文件/18.mp4'],
+    14: ['第二个文件/14.webp', '第二个文件/15.webp', '第二个文件/16.webp', '第二个文件/17.webp', '第二个文件/18.mp4'],
   },
   material: {
     20: ['第三个文件/内容一/20.mp4'],
-    21: ['第三个文件/内容三/22.png'],
-    22: ['第三个文件/内容/21.png', '第三个文件/内容/21.mp4'],
+    21: ['第三个文件/内容三/22.webp'],
+    22: ['第三个文件/内容/21.webp', '第三个文件/内容/21.mp4'],
   },
   other: {
-    24: ['第四个文件夹/内容一/24.png'],
-    25: ['第四个文件夹/内容二/Frame 41.png'],
+    24: ['第四个文件夹/内容一/24.webp'],
+    25: ['第四个文件夹/内容二/Frame 41.webp'],
   },
 }
 
@@ -93,54 +93,41 @@ function ContentImage({ src, eager = false }) {
 }
 
 function LoopVideo({ src, aspectRatio }) {
-  const firstRef = useRef(null)
-  const secondRef = useRef(null)
-  const [active, setActive] = useState(0)
-  const transitioningRef = useRef(false)
-  const videos = [firstRef, secondRef]
+  const containerRef = useRef(null)
+  const videoRef = useRef(null)
+  const [shouldLoad, setShouldLoad] = useState(false)
 
   useEffect(() => {
-    const first = firstRef.current
-    const second = secondRef.current
-    if (!first || !second) return undefined
-    setActive(0)
-    transitioningRef.current = false
-    first.currentTime = 0
-    second.currentTime = 0
-    second.pause()
-    const start = () => first.play().catch(() => {})
-    if (first.readyState >= 2) start()
-    else first.addEventListener('canplay', start, { once: true })
-    return () => {
-      first.removeEventListener('canplay', start)
-      first.pause()
-      second.pause()
-    }
+    const container = containerRef.current
+    if (!container) return undefined
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setShouldLoad(true)
+        const video = videoRef.current
+        if (video && video.paused) video.play().catch(() => {})
+      } else {
+        const video = videoRef.current
+        if (video && !video.paused) video.pause()
+      }
+    }, { rootMargin: '400px 0px', threshold: 0.01 })
+    observer.observe(container)
+    return () => observer.disconnect()
   }, [src])
 
   useEffect(() => {
-    const current = videos[active].current
-    if (!current) return undefined
-    const handleTimeUpdate = () => {
-      if (!current.duration || transitioningRef.current || current.currentTime < current.duration - 0.16) return
-      transitioningRef.current = true
-      const nextIndex = active === 0 ? 1 : 0
-      const next = videos[nextIndex].current
-      if (!next) return
-      next.currentTime = 0
-      next.play().catch(() => {})
-      setActive(nextIndex)
-      current.pause()
-      current.currentTime = 0
-      transitioningRef.current = false
+    const video = videoRef.current
+    if (!shouldLoad || !video) return undefined
+    const start = () => video.play().catch(() => {})
+    if (video.readyState >= 2) start()
+    else video.addEventListener('canplay', start, { once: true })
+    return () => {
+      video.removeEventListener('canplay', start)
+      video.pause()
     }
-    current.addEventListener('timeupdate', handleTimeUpdate)
-    return () => current.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [active])
+  }, [shouldLoad, src])
 
-  return <div className="source-page-video-loop" style={aspectRatio ? { aspectRatio } : undefined} aria-label="Portfolio project animation">
-    <video ref={firstRef} className="source-page-video-loop-item" style={{ opacity: active === 0 ? 1 : 0 }} src={src} muted playsInline preload="auto" />
-    <video ref={secondRef} className="source-page-video-loop-item" style={{ opacity: active === 1 ? 1 : 0 }} src={src} muted playsInline preload="auto" />
+  return <div ref={containerRef} className="source-page-video-loop" style={aspectRatio ? { aspectRatio } : undefined} aria-label="Portfolio project animation">
+    <video ref={videoRef} className="source-page-video-loop-item" src={shouldLoad ? src : undefined} muted loop playsInline preload={shouldLoad ? 'auto' : 'none'} />
   </div>
 }
 
@@ -179,10 +166,20 @@ function IntroVideo({ src, aspectRatio }) {
   </div>
 }
 
-function HorizontalScrubVideo({ src, poster, aspectRatio = '16 / 9', id, className = 'hero-frame', ariaLabel = '横向拖动控制视频进度' }) {
+function HorizontalScrubVideo({
+  src,
+  poster,
+  aspectRatio = '16 / 9',
+  id,
+  className = 'hero-frame',
+  ariaLabel = '横向拖动控制视频进度',
+  eagerPoster = false,
+  deferUntilNearViewport = false,
+}) {
   const containerRef = useRef(null)
   const videoRef = useRef(null)
   const [videoReady, setVideoReady] = useState(false)
+  const [shouldLoadVideo, setShouldLoadVideo] = useState(false)
   const initialFramePendingRef = useRef(false)
   const targetTimeRef = useRef(null)
   const rafRef = useRef(null)
@@ -191,9 +188,30 @@ function HorizontalScrubVideo({ src, poster, aspectRatio = '16 / 9', id, classNa
   const draggingRef = useRef(false)
 
   useEffect(() => {
+    setShouldLoadVideo(false)
+    setVideoReady(false)
+    if (deferUntilNearViewport) {
+      const container = containerRef.current
+      if (!container) return undefined
+      const nearObserver = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldLoadVideo(true)
+          nearObserver.disconnect()
+        }
+      }, { rootMargin: '800px 0px', threshold: 0.01 })
+      nearObserver.observe(container)
+      return () => nearObserver.disconnect()
+    }
+    // For the above-the-fold hero, let the poster image paint first so the
+    // 4 MB scrub video does not compete with LCP. Fallback after 1.2s.
+    const fallbackTimer = window.setTimeout(() => setShouldLoadVideo(true), 1200)
+    return () => window.clearTimeout(fallbackTimer)
+  }, [src, deferUntilNearViewport])
+
+  useEffect(() => {
     const container = containerRef.current
     const video = videoRef.current
-    if (!container || !video) return undefined
+    if (!container || !video || !shouldLoadVideo) return undefined
 
     // Keep the initial frame stable while the browser prepares the final
     // reveal frame. The first visible frame should already show the gift
@@ -334,11 +352,20 @@ function HorizontalScrubVideo({ src, poster, aspectRatio = '16 / 9', id, classNa
       targetTimeRef.current = null
       video.pause()
     }
-  }, [src])
+  }, [src, shouldLoadVideo])
 
   return <section ref={containerRef} id={id} className={`${className} interactive-hero`} style={{ aspectRatio }} aria-label={ariaLabel}>
-    <img className="interactive-hero-poster" src={poster} alt="" aria-hidden="true" />
-    <video ref={videoRef} src={src} poster={poster} muted playsInline preload="auto" controls={false} style={{ opacity: videoReady ? 1 : 0 }} />
+    <img
+      className="interactive-hero-poster"
+      src={poster}
+      alt=""
+      aria-hidden="true"
+      loading={eagerPoster ? 'eager' : 'lazy'}
+      fetchPriority={eagerPoster ? 'high' : undefined}
+      decoding="async"
+      onLoad={!deferUntilNearViewport ? () => setShouldLoadVideo(true) : undefined}
+    />
+    {shouldLoadVideo && <video ref={videoRef} src={src} poster={poster} muted playsInline preload="auto" controls={false} style={{ opacity: videoReady ? 1 : 0 }} />}
   </section>
 }
 
@@ -425,17 +452,17 @@ function Catalog() {
   const active = catalogGroups.find((group) => group.id === openId)
   return <section id="contents" className="catalog-section">
     <div className="catalog-canvas">
-      <img className="catalog-background" src={assetUrl('catalog/catalog-bg.webp')} width="2880" height="1620" alt="" loading="lazy" />
+      <img className="catalog-background" src={assetUrl('catalog/catalog-bg.webp')} width="1920" height="1080" alt="" loading="lazy" decoding="async" />
       {!active && <div className="folder-grid">{catalogGroups.map((group) => <button key={group.id} className="folder-card" onClick={() => setOpenId(group.id)} aria-label={`Folder ${group.id}`}>
-        <span className="folder-previews">{group.paths.map(([image]) => <img key={image} src={assetUrl(`catalog/paths/${image}`)} alt="" />)}</span>
-        <img className="folder-shape" src={assetUrl('catalog/folders/Union.png')} alt="" />
-        <img className="folder-glass" src={assetUrl('catalog/folders/Rectangle 229.png')} alt="" />
-        <img className="folder-label" src={assetUrl(`catalog/labels/${group.label}`)} alt="" />
+        <span className="folder-previews">{group.paths.map(([image]) => <img key={image} src={assetUrl(`catalog/paths/${image}`)} alt="" loading="lazy" decoding="async" />)}</span>
+        <img className="folder-shape" src={assetUrl('catalog/folders/Union.png')} alt="" loading="lazy" decoding="async" />
+        <img className="folder-glass" src={assetUrl('catalog/folders/Rectangle 229.webp')} alt="" loading="lazy" decoding="async" />
+        <img className="folder-label" src={assetUrl(`catalog/labels/${group.label}`)} alt="" loading="lazy" decoding="async" />
       </button>)}</div>}
     </div>
     {active && <div className="folder-popup-layer" onClick={() => setOpenId(null)}>
       <div className="folder-popup" onClick={(event) => event.stopPropagation()}>
-        <div className="popup-paths">{active.paths.map(([image, page, preview = image, name]) => <a className="popup-path" href={`#project/${active.id}/${page}`} key={image} aria-label={`Open project page ${page}`}><img className="popup-thumbnail" src={assetUrl(`catalog/square-previews/${preview}`)} alt="" /><span className="popup-path-name">{projectNameText[name]}</span></a>)}</div>
+        <div className="popup-paths">{active.paths.map(([image, page, preview = image, name]) => <a className="popup-path" href={`#project/${active.id}/${page}`} key={image} aria-label={`Open project page ${page}`}><img className="popup-thumbnail" src={assetUrl(`catalog/square-previews/${preview}`)} alt="" loading="lazy" decoding="async" /><span className="popup-path-name">{projectNameText[name]}</span></a>)}</div>
       </div>
     </div>}
   </section>
@@ -443,9 +470,9 @@ function Catalog() {
 
 function Home() {
   return <main className="site-shell" id="home">
-    <HorizontalScrubVideo src={assetUrl('hero-scrub.mp4')} poster={assetUrl('hero.webp')} />
+    <HorizontalScrubVideo src={assetUrl('hero-scrub.mp4')} poster={assetUrl('hero.webp')} eagerPoster />
     <section className="profile-frame" id="resume">
-      <img className="source-page-image" src={assetUrl('2.webp')} width="1920" height="2341" alt="Portfolio page 2" loading="lazy" />
+      <img className="source-page-image" src={assetUrl('2.webp')} width="1920" height="2341" alt="Portfolio page 2" loading="lazy" decoding="async" />
     </section>
     <Catalog />
     <HorizontalScrubVideo
@@ -454,6 +481,7 @@ function Home() {
       src={assetUrl('closing-scrub.mp4')}
       poster={assetUrl('closing.webp')}
       ariaLabel="底部封面横向拖动控制视频进度"
+      deferUntilNearViewport
     />
   </main>
 }
@@ -466,58 +494,35 @@ function ProjectDetail({ project }) {
 }
 
 function BackgroundMusic({ audioRef, enabled }) {
+  const [activated, setActivated] = useState(false)
+
   useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return undefined
-    audio.volume = 0.18
-    audio.autoplay = true
-    audio.loop = true
-    audio.preload = 'auto'
-    audio.muted = false
-
-    // Try to start as soon as the page is entered. Browsers that allow
-    // autoplay will begin immediately; browsers that wait for a gesture
-    // will be retried on the first user interaction below.
-    const tryPlay = () => {
-      if (!audio.paused) return
-      audio.play().catch(() => {})
-    }
-    const unlock = () => tryPlay()
-
-    audio.addEventListener('loadeddata', tryPlay)
-    audio.addEventListener('canplay', tryPlay)
-    audio.addEventListener('canplaythrough', tryPlay)
-    audio.load()
-    tryPlay()
-    window.addEventListener('pointerdown', unlock, { passive: true })
-    window.addEventListener('mousedown', unlock, { passive: true })
-    window.addEventListener('click', unlock, { passive: true })
-    window.addEventListener('pointermove', unlock, { passive: true })
-    window.addEventListener('keydown', unlock)
-    window.addEventListener('touchstart', unlock, { passive: true })
+    if (activated || !enabled) return undefined
+    const unlock = () => setActivated(true)
+    window.addEventListener('pointerdown', unlock, { passive: true, once: true })
+    window.addEventListener('click', unlock, { passive: true, once: true })
+    window.addEventListener('keydown', unlock, { once: true })
+    window.addEventListener('touchstart', unlock, { passive: true, once: true })
     return () => {
-      audio.removeEventListener('loadeddata', tryPlay)
-      audio.removeEventListener('canplay', tryPlay)
-      audio.removeEventListener('canplaythrough', tryPlay)
       window.removeEventListener('pointerdown', unlock)
-      window.removeEventListener('mousedown', unlock)
       window.removeEventListener('click', unlock)
-      window.removeEventListener('pointermove', unlock)
       window.removeEventListener('keydown', unlock)
       window.removeEventListener('touchstart', unlock)
-      audio.pause()
     }
-  }, [audioRef])
+  }, [activated, enabled])
 
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio) return undefined
+    if (!audio || !activated) return undefined
+    audio.volume = 0.18
+    audio.loop = true
+    audio.muted = false
     if (enabled) audio.play().catch(() => {})
     else audio.pause()
     return undefined
-  }, [audioRef, enabled])
+  }, [audioRef, activated, enabled])
 
-  return <audio ref={audioRef} src={assetUrl('portfolio-background.mp3')} autoPlay loop preload="auto" playsInline aria-hidden="true" />
+  return <audio ref={audioRef} src={activated ? assetUrl('portfolio-background.mp3') : undefined} loop preload="none" playsInline aria-hidden="true" />
 }
 
 function App() {
