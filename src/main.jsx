@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 
 const assetUrl = (path) => `${import.meta.env.BASE_URL}assets/${path}`
-const asset = (number) => assetUrl(`${number}.png`)
 const projectNameText = {
   'operations-1.png': '2026年中盛典活动',
   'operations-2.png': '海外宰牲节',
@@ -78,10 +77,6 @@ function useRoute() {
   const match = hash.match(/^#project\/([^/]+)(?:\/([^/]+))?/)
   const pages = projectContents[match?.[1]]?.[match?.[2]]
   return pages ? { id: match[1], selectedPath: match[2], pages } : null
-}
-
-function ImagePage({ number, src, eager = false }) {
-  return <img className="source-page-image" src={src ?? asset(number)} alt={number ? `Portfolio page ${number}` : ''} loading={eager ? 'eager' : 'lazy'} />
 }
 
 function ContentImage({ src, eager = false }) {
@@ -430,7 +425,7 @@ function Catalog() {
   const active = catalogGroups.find((group) => group.id === openId)
   return <section id="contents" className="catalog-section">
     <div className="catalog-canvas">
-      <img className="catalog-background" src={assetUrl('catalog/catalog-bg.png')} alt="" />
+      <img className="catalog-background" src={assetUrl('catalog/catalog-bg.webp')} width="2880" height="1620" alt="" loading="lazy" />
       {!active && <div className="folder-grid">{catalogGroups.map((group) => <button key={group.id} className="folder-card" onClick={() => setOpenId(group.id)} aria-label={`Folder ${group.id}`}>
         <span className="folder-previews">{group.paths.map(([image]) => <img key={image} src={assetUrl(`catalog/paths/${image}`)} alt="" />)}</span>
         <img className="folder-shape" src={assetUrl('catalog/folders/Union.png')} alt="" />
@@ -448,14 +443,16 @@ function Catalog() {
 
 function Home() {
   return <main className="site-shell" id="home">
-    <HorizontalScrubVideo src={assetUrl('hero-scrub.mp4')} poster={assetUrl('hero.png')} />
-    <section className="profile-frame" id="resume"><ImagePage number={2} /></section>
+    <HorizontalScrubVideo src={assetUrl('hero-scrub.mp4')} poster={assetUrl('hero.webp')} />
+    <section className="profile-frame" id="resume">
+      <img className="source-page-image" src={assetUrl('2.webp')} width="1920" height="2341" alt="Portfolio page 2" loading="lazy" />
+    </section>
     <Catalog />
     <HorizontalScrubVideo
       id="contact"
       className="closing-frame"
       src={assetUrl('closing-scrub.mp4')}
-      poster={assetUrl('closing.png')}
+      poster={assetUrl('closing.webp')}
       ariaLabel="底部封面横向拖动控制视频进度"
     />
   </main>
